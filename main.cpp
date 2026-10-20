@@ -51,6 +51,68 @@ using origChangeWorkspace = Config::Actions::ActionResult (*)(PHLWORKSPACE);
 
 static bool g_unloading = false;
 
+// Custom event bus events exposed to Lua (hl.on).
+static SP<Event::CEventBus::CCustomEvent> g_overviewOpenedEvent;
+static SP<Event::CEventBus::CCustomEvent> g_overviewClosedEvent;
+
+bool registerOverviewEvents() {
+    using CCustomEvent = Event::CEventBus::CCustomEvent;
+    using enum CCustomEvent::eType;
+
+    if (g_overviewOpenedEvent)
+        return true;
+
+    g_overviewOpenedEvent = makeShared<CCustomEvent>("scrolloverview.opened", std::vector<CCustomEvent::eType>{TYPE_MONITOR});
+    g_overviewClosedEvent = makeShared<CCustomEvent>("scrolloverview.closed", std::vector<CCustomEvent::eType>{TYPE_MONITOR});
+
+    const auto OPENED  = Event::bus()->addPluginEvent(g_overviewOpenedEvent);
+    const auto CLOSED  = Event::bus()->addPluginEvent(g_overviewClosedEvent);
+    const bool SUCCESS = OPENED && CLOSED;
+    if (!SUCCESS) {
+        removeOverviewEvents();
+        return false;
+    }
+    return true;
+}
+
+void removeOverviewEvents() {
+    if (g_overviewOpenedEvent)
+        (void)Event::bus()->removePluginEvent(g_overviewOpenedEvent->m_name);
+    if (g_overviewClosedEvent)
+        (void)Event::bus()->removePluginEvent(g_overviewClosedEvent->m_name);
+    g_overviewOpenedEvent.reset();
+    g_overviewClosedEvent.reset();
+}
+
+// Config reloads destroy the Lua state and its event handler; the new handler only
+// bridges plugin events announced after its creation. Re-announce ours so hl.on
+// subscriptions made in the fresh config actually receive emissions.
+static void reannounceOverviewEvents() {
+    if (g_unloading)
+        return;
+
+    if (g_overviewOpenedEvent)
+        Event::bus()->m_events.pluginEventAdded.emit(g_overviewOpenedEvent);
+    if (g_overviewClosedEvent)
+        Event::bus()->m_events.pluginEventAdded.emit(g_overviewClosedEvent);
+}
+
+static void emitOverviewEvent(SP<Event::CEventBus::CCustomEvent>& event, PHLMONITOR monitor) {
+    if (g_unloading || !event)
+        return;
+
+    if (const auto res = event->emit({PHLMONITORREF{monitor}}); !res)
+        HyprlandAPI::addNotification(SCROLLOVERVIEW_HANDLE, "[scrolloverview] failed emitting " + event->m_name + ": " + res.error(), CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
+}
+
+void emitOverviewOpened(PHLMONITOR monitor) {
+    emitOverviewEvent(g_overviewOpenedEvent, monitor);
+}
+
+void emitOverviewClosed(PHLMONITOR monitor) {
+    emitOverviewEvent(g_overviewClosedEvent, monitor);
+}
+
 // Do NOT change this function.
 APICALL EXPORT std::string PLUGIN_API_VERSION() {
     return HYPRLAND_API_VERSION;
@@ -325,6 +387,7 @@ SOverviewOpenResult openOverview(PHLMONITOR monitor, bool swipe) {
     auto overview = makeShared<CScrollOverview>(monitor->m_activeWorkspace, swipe, monitor);
     registerScrollOverview(overview);
     reconcileNativeDragHook();
+    emitOverviewOpened(monitor);
     return {.overview = overview, .created = true};
 }
 
@@ -689,7 +752,10 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
             overview->onPreRender();
     });
 
-    g_configReloadHook = Event::bus()->m_events.config.reloaded.listen([] { reconcileNativeDragHook(); });
+    g_configReloadHook = Event::bus()->m_events.config.reloaded.listen([] {
+        reconcileNativeDragHook();
+        reannounceOverviewEvents();
+    });
 
     g_nativeDragMouseMoveHook = Event::bus()->m_events.input.mouse.move.listen([](Vector2D, Event::SCallbackInfo& info) {
         if (info.cancelled || g_unloading || scrollOverviews().empty())
@@ -709,6 +775,9 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     ScrollOverview::Config::registerGesture(::onRegisterOverviewGesture, ::overviewGestureKeyword);
     ScrollOverview::Config::registerConfig();
 
+    if (!registerOverviewEvents())
+        HyprlandAPI::addNotification(SCROLLOVERVIEW_HANDLE, "[scrolloverview] failed registering Lua events", CHyprColor{1.0, 0.75, 0.2, 1.0}, 7500);
+
     return {"scrolloverview", "A plugin for an overview", "Vaxry, yayuuu", SCROLLOVERVIEW_VERSION};
 }
 
@@ -722,6 +791,7 @@ APICALL EXPORT void PLUGIN_EXIT() {
         g_pScrollChangeWorkspaceHook->unhook();
     clearScrollOverviews();
     disableScrollOverviewHooks();
+    removeOverviewEvents();
 
     if (g_pTrackpadGestures)
         g_pTrackpadGestures->clearGestures();

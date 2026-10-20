@@ -155,6 +155,7 @@ void removeOverview(IOverview* overview_) {
 
     const auto PMONITOR = overview->pMonitor.lock();
     unregisterScrollOverview(overview);
+    emitOverviewClosed(PMONITOR);
     if (scrollOverviews().empty())
         disableScrollOverviewHooks();
 

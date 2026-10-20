@@ -4,3 +4,4 @@ Lua makes it possible to use ScrollOverview far beyond its default behavior. By 
 - [Dynamic workspaces](Dynamic-workspaces.md) — create a new workspace by scrolling past the last populated workspace
 - [ALT + Tab overview](ALT-Tab-overview.md) — use ScrollOverview as a visual window switcher
 - [Toggle scroll direction](Toggle-scroll-direction.md) — temporarily change the scrolling mode while holding Shift
+- [Events](Events.md) — react to the overview opening and closing with `hl.on`
