@@ -7,6 +7,7 @@
 #define private public
 #include <hyprland/src/desktop/view/window/Window.hpp>
 #include <hyprland/src/desktop/view/window/WindowPresentation.hpp>
+#include <hyprland/src/config/shared/complex/CornersData.hpp>
 #include <hyprland/src/layout/algorithm/Algorithm.hpp>
 #include <hyprland/src/layout/algorithm/tiled/scrolling/ScrollingAlgorithm.hpp>
 #include <hyprland/src/render/Renderer.hpp>
@@ -103,11 +104,19 @@ static CBox clipScrollingIndicatorBox(CBox box, const CDropIndicator::SRenderPar
     return box.intersection({{params.workspaceUsableBox.x, box.y}, {params.workspaceUsableBox.width, box.height}});
 }
 
-static int indicatorRounding(const CDropIndicator::SRenderParams& params) {
-    const float ROUNDING = params.anchor.window ? params.anchor.window->presentation().rounding() : ScrollOverview::Config::getValue<int>("decoration:rounding");
-    const float SCALE    = std::max(params.renderScale, 0.01F) * std::max<float>(params.monitor ? params.monitor->m_scale : 1.F, 0.01F);
+static Math::SCornerRadii indicatorRounding(const CDropIndicator::SRenderParams& params) {
+    Math::SCornerRadii ROUNDING;
+    if (params.anchor.window)
+        ROUNDING = params.anchor.window->presentation().rounding();
+    else {
+        auto& ref = ScrollOverview::Config::valueRef<::Config::IComplexConfigValue>("decoration:rounding");
+        if (ref.good())
+            ROUNDING = Math::SCornerRadii{*sc<::Config::CCornersData*>(ref.ptr())};
+    }
 
-    return std::max(0, sc<int>(std::round(ROUNDING * SCALE)));
+    const float SCALE = std::max(params.renderScale, 0.01F) * std::max<float>(params.monitor ? params.monitor->m_scale : 1.F, 0.01F);
+
+    return ROUNDING * SCALE;
 }
 
 static float indicatorRoundingPower(const CDropIndicator::SRenderParams& params) {

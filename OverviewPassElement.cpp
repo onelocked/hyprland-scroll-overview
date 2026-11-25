@@ -134,7 +134,7 @@ std::vector<UP<IPassElement>> COverviewShadowPassElement::draw(Render::CRenderCo
 
     CRegion shadowDamage = ctx.m_data.damage.copy().intersect(data.fullBox);
     if (data.ignoreWindow)
-        shadowDamage.subtract(roundedRectRegion(data.cutoutBox, data.rounding + 1, data.roundingPower));
+        shadowDamage.subtract(roundedRectRegion(data.cutoutBox, sc<int>(std::ceil(data.rounding.max())) + 1, data.roundingPower));
 
     if (shadowDamage.empty())
         return {};

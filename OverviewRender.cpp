@@ -19,7 +19,7 @@ void flushPass(Render::CRenderContext& ctx, PHLMONITOR monitor) {
     pass.clear();
 }
 
-void queueBlur(Render::CRenderContext& ctx, const CBox& box, int rounding, float roundingPower, float alpha, bool usePrecomputedBlur) {
+void queueBlur(Render::CRenderContext& ctx, const CBox& box, Math::SCornerRadii rounding, float roundingPower, float alpha, bool usePrecomputedBlur) {
     if (alpha <= 0.F)
         return;
 
@@ -37,7 +37,7 @@ void queueBlur(Render::CRenderContext& ctx, const CBox& box, int rounding, float
     Render::IHyprRenderer::currentPass(ctx).add(makeUnique<CRectPassElement>(data));
 }
 
-void renderBlur(Render::CRenderContext& ctx, PHLMONITOR monitor, const CBox& box, int rounding, float roundingPower, float alpha, bool usePrecomputedBlur) {
+void renderBlur(Render::CRenderContext& ctx, PHLMONITOR monitor, const CBox& box, Math::SCornerRadii rounding, float roundingPower, float alpha, bool usePrecomputedBlur) {
     if (!monitor)
         return;
 

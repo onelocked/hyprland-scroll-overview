@@ -1,6 +1,7 @@
 #pragma once
 #include "globals.hpp"
 #include <hyprland/src/config/shared/complex/ComplexDataTypes.hpp>
+#include <hyprland/src/helpers/math/CornerRadii.hpp>
 #include <hyprland/src/render/pass/PassElement.hpp>
 
 class CScrollOverviewPassElement : public IPassElement {
@@ -28,10 +29,10 @@ class COverviewShadowPassElement : public IPassElement {
         PHLMONITORREF monitor;
         CBox          fullBox;
         CBox          cutoutBox;
-        int           rounding      = 0;
-        float         roundingPower = 2.F;
-        int           range         = 0;
-        int           renderPower   = 0;
+        Math::SCornerRadii rounding;
+        float              roundingPower = 2.F;
+        int                range         = 0;
+        int                renderPower   = 0;
         Config::CGradientValueData color;
         float         alpha        = 1.F;
         bool          ignoreWindow = true;

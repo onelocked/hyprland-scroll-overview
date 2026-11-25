@@ -70,12 +70,12 @@ struct SOverviewWindowMetrics {
     float borderSize              = 0.F;
     int   borderPx                = 0;
     float borderPxScaled          = 0.F;
-    float roundingBase            = 0.F;
-    float roundingPower           = 2.F;
-    float correctionOffset        = 0.F;
-    float outerRound              = 0.F;
-    int   roundingPx              = 0;
-    int   outerRoundPx            = 0;
+    Math::SCornerRadii roundingBase;
+    float              roundingPower    = 2.F;
+    float              correctionOffset = 0.F;
+    Math::SCornerRadii outerRound;
+    Math::SCornerRadii roundingPx;
+    Math::SCornerRadii outerRoundPx;
     float hyprbarLogicalHeight    = 0.F;
     int   hyprbarHeightPx         = 0;
     float hyprbarHeightPxScaled   = 0.F;
@@ -258,10 +258,10 @@ static void roundStandaloneWindowPassElements(const PHLWINDOW& window, PHLMONITO
     if (Fullscreen::controller()->isFullscreen(window))
         return;
 
-    const int   rounding      = sc<int>(std::round(window->presentation().rounding() * monitor->m_scale * renderScale));
+    const auto  rounding      = window->presentation().rounding() * (monitor->m_scale * renderScale);
     const float roundingPower = window->presentation().roundingPower();
 
-    if (rounding <= 0)
+    if (!rounding.isRounded())
         return;
 
     auto& passElements = Render::IHyprRenderer::currentPass(g_pHyprRenderer->context()).m_passElements;
@@ -451,9 +451,9 @@ static SOverviewWindowMetrics getOverviewWindowMetrics(PHLMONITOR monitor, const
     metrics.roundingBase            = window->presentation().rounding();
     metrics.roundingPower           = window->presentation().roundingPower();
     metrics.correctionOffset        = metrics.borderSize * (M_SQRT2 - 1) * std::max(2.0 - metrics.roundingPower, 0.0);
-    metrics.outerRound              = metrics.roundingBase > 0 ? (metrics.roundingBase + metrics.borderSize) - metrics.correctionOffset : 0.F;
-    metrics.roundingPx              = sc<int>(std::round(metrics.roundingBase * metrics.pxScale));
-    metrics.outerRoundPx            = sc<int>(std::round(metrics.outerRound * metrics.pxScale));
+    metrics.outerRound              = metrics.roundingBase.expanded(metrics.borderSize).inset(metrics.correctionOffset);
+    metrics.roundingPx              = metrics.roundingBase * metrics.pxScale;
+    metrics.outerRoundPx            = metrics.outerRound * metrics.pxScale;
     metrics.hyprbarLogicalHeight    = getOverviewHyprbarLogicalHeight(window);
     metrics.borderIncludesHyprbar   = shouldOverviewBorderIncludeHyprbar(window);
     metrics.shadowIncludesHyprbar   = shouldOverviewShadowIncludeHyprbar(window, metrics.borderIncludesHyprbar);
@@ -536,9 +536,11 @@ static void renderOverviewHyprbarDecoration(SOverviewCustomDecorationRenderState
     const bool     previousBorderCacheDirty = BORDERDECO && BORDERDECO->m_borderSizeCacheDirty;
     const int      previousCachedBorderSize = BORDERDECO ? BORDERDECO->m_cachedBorderSize : -1;
 
-    const auto scaledRounding   = std::max<Config::INTEGER>(0, sc<Config::INTEGER>(std::round(window->m_ruleApplicator->rounding().valueOrDefault() * metrics.renderScale)));
-    const auto scaledBorderSize = std::max<Config::INTEGER>(0, sc<Config::INTEGER>(std::round(window->presentation().borderSize() * metrics.renderScale)));
-    window->m_ruleApplicator->rounding().set(scaledRounding, Desktop::Types::PRIORITY_SET_PROP);
+    const auto scaledRounding   = Math::SCornerRadii{window->m_ruleApplicator->rounding().valueOrDefault()} * metrics.renderScale;
+    const auto scaledBorderSize = std::max<::Config::INTEGER>(0, sc<::Config::INTEGER>(std::round(window->presentation().borderSize() * metrics.renderScale)));
+    window->m_ruleApplicator->rounding().set(::Config::CCornersData{sc<int64_t>(std::round(scaledRounding.topLeft)), sc<int64_t>(std::round(scaledRounding.topRight)),
+                                                                    sc<int64_t>(std::round(scaledRounding.bottomRight)), sc<int64_t>(std::round(scaledRounding.bottomLeft))},
+                                             Desktop::Types::PRIORITY_SET_PROP);
     window->m_ruleApplicator->borderSize().set(scaledBorderSize, Desktop::Types::PRIORITY_SET_PROP);
     if (BORDERDECO)
         BORDERDECO->m_borderSizeCacheDirty = true;
@@ -729,11 +731,11 @@ static void renderOverviewBordersPlusPlusDecoration(PHLMONITOR monitor, const PH
     const float roundingPower   = metrics.roundingPower;
 
     // Same base rounding the plugin uses: the window rounding plus the border it sits on.
-    const int rounding = metrics.roundingBase <= 0.F ? 0 : sc<int>(std::round((metrics.roundingBase + metrics.borderSize) * metrics.pxScale));
+    const auto rounding = metrics.roundingBase.expanded(metrics.borderSize) * metrics.pxScale;
 
     // Ring i is drawn outward from the box of ring i - 1, exactly like the plugin does it.
-    CBox box  = getOverviewBorderBox(windowBox, metrics);
-    int  loop = rounding;
+    CBox                box  = getOverviewBorderBox(windowBox, metrics);
+    Math::SCornerRadii  loop = rounding;
 
     for (size_t i = 0; i < COUNT; ++i) {
         // renderBorder scales the size by the monitor scale itself, so only the overview
@@ -744,13 +746,13 @@ static void renderOverviewBordersPlusPlusDecoration(PHLMONITOR monitor, const PH
             break;
 
         if (i != 0)
-            loop += thickness;
+            loop = loop.expanded(sc<float>(thickness));
 
         CBorderPassElement::SBorderData data;
         data.box           = box;
         data.grad1         = Config::CGradientValueData{getOverviewBordersPlusPlusColor(i)};
         data.round         = NATURALROUNDING ? rounding : loop;
-        data.outerRound    = NATURALROUNDING ? rounding : -1;
+        data.outerRound    = NATURALROUNDING ? rounding : Math::SCornerRadii{-1.F};
         data.roundingPower = roundingPower;
         data.a             = metrics.targetOpacity;
         data.borderSize    = thickness;
@@ -785,7 +787,7 @@ static void renderOverviewGroupTabIndicators(PHLMONITOR monitor, const PHLWINDOW
     const float outerGap     = sc<float>(POUTERGAP) * metrics.pxScale;
     const float innerGap     = sc<float>(PINNERGAP) * metrics.pxScale;
     const float oneBarHeight = sc<float>(POUTERGAP + PINDICATORHEIGHT + PINDICATORGAP + ((PGRADIENTS || PRENDERTITLES) ? PHEIGHT : 0)) * metrics.pxScale;
-    const int   rounding     = sc<int>(std::round(PROUNDING * metrics.pxScale));
+    const auto  rounding     = Math::SCornerRadii{sc<float>(PROUNDING)} * metrics.pxScale;
     CBox        indicatorArea = windowBox.copy().expand(metrics.borderPxScaled);
     indicatorArea.y -= metrics.hyprbarHeightPxScaled;
     auto* const GROUPCOLACTIVE         = sc<Config::CGradientValueData*>(ScrollOverview::Config::valueRef<Config::IComplexConfigValue>("group:groupbar:col.active").ptr());
