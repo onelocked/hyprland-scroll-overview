@@ -1642,27 +1642,23 @@ CScrollOverview::CScrollOverview(PHLWORKSPACE startedOn_, bool swipe_, PHLMONITO
         const auto IGNOREDMODS = Input::HL_MODIFIER_CAPS | Input::HL_MODIFIER_MOD2;
         const auto MODS = sc<Input::ModifierMask>(sc<uint8_t>(g_pInputManager->getModsFromAllKBs()) & ~sc<uint8_t>(IGNOREDMODS));
 
-        if ((KEYSYM == XKB_KEY_Return || KEYSYM == XKB_KEY_KP_Enter || KEYSYM == XKB_KEY_Left || KEYSYM == XKB_KEY_KP_Left || KEYSYM == XKB_KEY_Right ||
-             KEYSYM == XKB_KEY_KP_Right || KEYSYM == XKB_KEY_Up || KEYSYM == XKB_KEY_KP_Up || KEYSYM == XKB_KEY_Down || KEYSYM == XKB_KEY_KP_Down) &&
+        if ((KEYSYM == XKB_KEY_Return || KEYSYM == XKB_KEY_KP_Enter || KEYSYM == XKB_KEY_h || KEYSYM == XKB_KEY_j || KEYSYM == XKB_KEY_k ||
+             KEYSYM == XKB_KEY_l) &&
             MODS != Input::HL_MODIFIER_NONE)
             return;
 
         switch (KEYSYM) {
-            case XKB_KEY_Left:
-            case XKB_KEY_KP_Left:
+            case XKB_KEY_h:
                 moveSelection("left");
                 break;
-            case XKB_KEY_Right:
-            case XKB_KEY_KP_Right:
-                moveSelection("right");
+            case XKB_KEY_j:
+                moveSelection("down");
                 break;
-            case XKB_KEY_Up:
-            case XKB_KEY_KP_Up:
+            case XKB_KEY_k:
                 moveSelection("up");
                 break;
-            case XKB_KEY_Down:
-            case XKB_KEY_KP_Down:
-                moveSelection("down");
+            case XKB_KEY_l:
+                moveSelection("right");
                 break;
             case XKB_KEY_Return:
             case XKB_KEY_KP_Enter:
